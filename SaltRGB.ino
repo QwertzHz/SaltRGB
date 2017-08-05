@@ -289,17 +289,17 @@ void loop() {
       }
       if (submodePattern == PATTERN_PULSE) {
         double patternPulseValue = 0.5 * sin(millis() / (float)(-(patternPulseSpeed - 5) * 100)) + 0.5;
-        patternPulseRed = curve(selectRed * patternPulseValue, 255);
-        patternPulseGreen = curve(selectGreen * patternPulseValue, 255);
-        patternPulseBlue = curve(selectBlue * patternPulseValue, 255);
+        patternPulseRed = selectRed * patternPulseValue;
+        patternPulseGreen = selectGreen * patternPulseValue;
+        patternPulseBlue = selectBlue * patternPulseValue;
       }
       if (submodePattern == PATTERN_CANDLE) {
         patternCandleFlickerTimer -= sinceLastMillis;
         if (patternCandleFlickerTimer <= 0) {
           patternCandleRed = 255;
-          patternCandleGreen = random(127 - (patternCandleSpeed + 4) * 3, 127 + (patternCandleSpeed + 4) * 3);
+          patternCandleGreen = random(117 - (patternCandleSpeed + 4) * 3, 117 + (patternCandleSpeed + 4) * 3);
           patternCandleBlue = random(9 - (patternCandleSpeed + 4) * 1, 9 + (patternCandleSpeed + 4) * 1);
-          patternCandleFlickerTimer += random(60 - (patternCandleSpeed + 4) * 4, 60 + (patternCandleSpeed + 4) * 4);
+          patternCandleFlickerTimer += random(40 - (patternCandleSpeed + 4) * 4, 40 + (patternCandleSpeed + 4) * 4);
         }
       }
     }
