@@ -250,38 +250,38 @@ void loop() {
       }
       if (submodePattern == PATTERN_FADE) {
         float b = 1 / (float)(-(patternFadeSpeed - 5) * 400 - 300);
-        float C = 255;
+        int C = 255;
         float H = millis() * b;
         float HH = (H / (PI / 3.0));
-        float HHH = HH;
-        while (HHH > 2) HHH -= 2;
-        float X = C * (1 - abs(HHH - 1));
-        if ((int)HH % 6 == 0) {
+        int iHH = (int)HH;
+        float HHHf = HH - iHH;
+        int X = C * (1 - abs(HHHf + iHH % 2 - 1));
+        if (iHH % 6 == 0) {
            patternFadeRed = C;
            patternFadeGreen = curve(X, 255);
            patternFadeBlue = 0;
         }
-        if ((int)HH % 6 == 1) {
+        if (iHH % 6 == 1) {
            patternFadeRed = curve(X, 255);
            patternFadeGreen = C;
            patternFadeBlue = 0;
         }
-        if ((int)HH % 6 == 2) {
+        if (iHH % 6 == 2) {
            patternFadeRed = 0;
            patternFadeGreen = C;
            patternFadeBlue = curve(X, 255);
         }
-        if ((int)HH % 6 == 3) {
+        if (iHH % 6 == 3) {
            patternFadeRed = 0;
            patternFadeGreen = curve(X, 255);
            patternFadeBlue = C;
         }
-        if ((int)HH % 6 == 4) {
+        if (iHH % 6 == 4) {
            patternFadeRed = curve(X, 255);
            patternFadeGreen = 0;
            patternFadeBlue = C;
         }
-        if ((int)HH % 6 == 5) {
+        if (iHH % 6 == 5) {
            patternFadeRed = C;
            patternFadeGreen = 0;
            patternFadeBlue = curve(X, 255);
