@@ -37,7 +37,7 @@
 Adafruit_NeoPixel ring = Adafruit_NeoPixel(12, PIN_LED);
 IRrecv ir(PIN_IR);
 decode_results irData;
-unsigned long lastMillis, sinceLastMillis;
+unsigned long lastMillis, sinceLastMillis, mil = 0;
 int state = ON, mode = PATTERN, submodeSelect = SELECT_RED, submodePattern = PATTERN_FADE;
 const int BRIGHTNESS_STEPS = 8;
 const int COLOR_STEPS = 8;
@@ -71,6 +71,7 @@ void loop() {
   uint16_t code = grabIR();
 
   if (state == OFF) {
+    if (mil != 0) mil = 0;
     if (brightness != 0) {
       brightness = 0;
     }
@@ -84,6 +85,7 @@ void loop() {
       #endif
     }
   } else if (state == ON) {
+    mil += sinceLastMillis;
     if (brightness != curve(brightnessStep, BRIGHTNESS_STEPS)) {
       brightness = curve(brightnessStep, BRIGHTNESS_STEPS);
     }
@@ -251,7 +253,7 @@ void loop() {
       if (submodePattern == PATTERN_FADE) {
         float b = 1 / (float)(-(patternFadeSpeed - 5) * 400 - 300);
         int C = 255;
-        float H = millis() * b;
+        float H = mil * b;
         float HH = (H / (PI / 3.0));
         int iHH = (int)HH;
         float HHHf = HH - iHH;
