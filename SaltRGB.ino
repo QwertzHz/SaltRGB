@@ -10,13 +10,9 @@
 #define OFF 0
 #define ON 1
 #define SELECT 0
-#define PATTERN 1
-#define SELECT_RED 0
-#define SELECT_GREEN 1
-#define SELECT_BLUE 2
-#define PATTERN_FADE 0
-#define PATTERN_PULSE 1
-#define PATTERN_CANDLE 2
+#define PATTERN_FADE 1
+#define PATTERN_PULSE 2
+#define PATTERN_CANDLE 3
 #define IR_PREFIX 0x10EF
 #define IR_POWER 0xD827
 #define IR_A 0xF807
@@ -37,12 +33,14 @@
 Adafruit_NeoPixel ring = Adafruit_NeoPixel(12, PIN_LED);
 IRrecv ir(PIN_IR);
 decode_results irData;
-unsigned long lastMillis, sinceLastMillis, mil = 0;
-int state = ON, mode = PATTERN, submodeSelect = SELECT_RED, submodePattern = PATTERN_FADE;
+unsigned long lastMillis, sinceLastMillis, patternFadeTimer = 0;
+int state = ON, mode = PATTERN_FADE;
 const int BRIGHTNESS_STEPS = 8;
 const int COLOR_STEPS = 8;
 int brightness = 255, brightnessStep = BRIGHTNESS_STEPS;
-int selectRed = 255, selectRedStep = COLOR_STEPS, selectGreen = 255, selectGreenStep = COLOR_STEPS, selectBlue = 255, selectBlueStep = COLOR_STEPS;
+const int SELECT_HUE_STEPS = 24;
+int selectHueStep = 0;
+int selectRed = 255, selectGreen = 0, selectBlue = 0;
 int patternFadeSpeed = 0, patternPulseSpeed = 0, patternCandleSpeed = 0;
 int patternFadeRed, patternFadeGreen, patternFadeBlue;
 int patternPulseRed, patternPulseGreen, patternPulseBlue;
@@ -50,10 +48,10 @@ int patternCandleRed, patternCandleGreen, patternCandleBlue, patternCandleFlicke
 const int MAX_SPEED_OPTION = 4;
 
 void setup() {
-  #if DEBUG >= 1
+#if DEBUG >= 1
   Serial.begin(9600);
   Serial.println("Hello!");
-  #endif
+#endif
 
   lastMillis = 0;
 
@@ -67,33 +65,30 @@ void setup() {
 void loop() {
   sinceLastMillis = millis() - lastMillis;
   lastMillis = millis();
-  
+
   uint16_t code = grabIR();
 
   if (state == OFF) {
-    if (mil != 0) mil = 0;
+    if (patternFadeTimer != 0) patternFadeTimer = 0;
     if (brightness != 0) {
       brightness = 0;
     }
     if (code == IR_POWER) {
       state = ON;
-      #if DEBUG >= 1
-      Serial.print("status ON (");
-      Serial.print( (mode == SELECT) ? "SELECT-" : "PATTERN-" );
-      Serial.print( (mode == SELECT) ? submodeSelect : submodePattern );
-      Serial.print(")\n");
-      #endif
+#if DEBUG >= 1
+      Serial.println(mode);
+#endif
     }
   } else if (state == ON) {
-    mil += sinceLastMillis;
+    patternFadeTimer += sinceLastMillis;
     if (brightness != curve(brightnessStep, BRIGHTNESS_STEPS)) {
       brightness = curve(brightnessStep, BRIGHTNESS_STEPS);
     }
     if (code == IR_POWER) {
       state = OFF;
-      #if DEBUG >= 1
+#if DEBUG >= 1
       Serial.println("status OFF");
-      #endif
+#endif
     }
     if (code == IR_UP) {
       if (brightnessStep < BRIGHTNESS_STEPS) {
@@ -107,204 +102,123 @@ void loop() {
         brightness = curve(brightnessStep, BRIGHTNESS_STEPS);
       }
     }
+    if (code == IR_SEL) {
+      mode = SELECT;
+#if DEBUG >= 1
+      Serial.println("SELECT");
+#endif
+      return;
+    }
+    if (code == IR_A) {
+      mode = PATTERN_FADE;
+      patternFadeTimer = 0;
+#if DEBUG >= 1
+      Serial.println("PATTERN_FADE");
+#endif
+    }
+    if (code == IR_B) {
+      mode = PATTERN_PULSE;
+#if DEBUG >= 1
+      Serial.println("PATTERN_PULSE");
+#endif
+    }
+    if (code == IR_C) {
+      mode = PATTERN_CANDLE;
+#if DEBUG >= 1
+      Serial.println("PATTERN_CANDLE");
+#endif
+    }
     if (mode == SELECT) {
-      if (code == IR_SEL) {
-        mode = PATTERN;
-        #if DEBUG >= 1
-        Serial.print("mode PATTERN-");
-        Serial.print(submodePattern);
-        Serial.print("\n");
-        #endif
-        return;
-      }
-      if (code == IR_A) {
-        submodeSelect = SELECT_RED;
-        #if DEBUG >= 1
-        Serial.println("submode SELECT_RED");
-        #endif
-      }
-      if (code == IR_B) {
-        submodeSelect = SELECT_GREEN;
-        #if DEBUG >= 1
-        Serial.println("submode SELECT_GREEN");
-        #endif
-      }
-      if (code == IR_C) {
-        submodeSelect = SELECT_BLUE;
-        #if DEBUG >= 1
-        Serial.println("submode SELECT_BLUE");
-        #endif
-      }
       if (code == IR_RIGHT) {
-        if (submodeSelect == SELECT_RED && selectRedStep < COLOR_STEPS) {
-          selectRedStep++;
-          selectRed = curve(selectRedStep, COLOR_STEPS);
+        selectHueStep++;
+        if (selectHueStep >= SELECT_HUE_STEPS) {
+          selectHueStep -= SELECT_HUE_STEPS;
         }
-        if (submodeSelect == SELECT_GREEN && selectGreenStep < COLOR_STEPS) {
-          selectGreenStep++;
-          selectGreen = curve(selectGreenStep, COLOR_STEPS);
-        }
-        if (submodeSelect == SELECT_BLUE && selectBlueStep < COLOR_STEPS) {
-          selectBlueStep++;
-          selectBlue = curve(selectBlueStep, COLOR_STEPS);
-        }
-        #if DEBUG >= 2
-        Serial.print("R");
-        Serial.print(selectRedStep);
-        Serial.print(" G");
-        Serial.print(selectGreenStep);
-        Serial.print(" B");
-        Serial.print(selectBlueStep);
-        Serial.print("\n");
-        #endif
+        hueToRGB(2 * PI * selectHueStep / SELECT_HUE_STEPS, selectRed, selectGreen, selectBlue);
+        selectRed = curve(selectRed, 255);
+        selectGreen = curve(selectGreen, 255);
+        selectBlue = curve(selectBlue, 255);
+#if DEBUG >= 2
+        Serial.println(selectHueStep);
+#endif
       }
       if (code == IR_LEFT) {
-        if (submodeSelect == SELECT_RED && selectRedStep > 0 && selectRedStep + selectGreenStep + selectBlueStep > 1) {
-          selectRedStep--;
-          selectRed = curve(selectRedStep, COLOR_STEPS);
+        selectHueStep--;
+        if (selectHueStep < 0) {
+          selectHueStep += SELECT_HUE_STEPS;
         }
-        if (submodeSelect == SELECT_GREEN && selectGreenStep > 0 && selectRedStep + selectGreenStep + selectBlueStep > 1) {
-          selectGreenStep--;
-          selectGreen = curve(selectGreenStep, COLOR_STEPS);
-        }
-        if (submodeSelect == SELECT_BLUE && selectBlueStep > 0 && selectRedStep + selectGreenStep + selectBlueStep > 1) {
-          selectBlueStep--;
-          selectBlue = curve(selectBlueStep, COLOR_STEPS);
-        }
-        #if DEBUG >= 2
-        Serial.print("R");
-        Serial.print(selectRedStep);
-        Serial.print(" G");
-        Serial.print(selectGreenStep);
-        Serial.print(" B");
-        Serial.print(selectBlueStep);
-        Serial.print("\n");
-        #endif
+        hueToRGB(2 * PI * selectHueStep / SELECT_HUE_STEPS, selectRed, selectGreen, selectBlue);
+        selectRed = curve(selectRed, 255);
+        selectGreen = curve(selectGreen, 255);
+        selectBlue = curve(selectBlue, 255);
+#if DEBUG >= 2
+        Serial.println(selectHueStep);
+#endif
       }
     }
-    if (mode == PATTERN) {
-      if (code == IR_SEL) {
-        mode = SELECT;
-        #if DEBUG >= 1
-        Serial.print("mode SELECT-");
-        Serial.print(submodeSelect);
-        Serial.print("\n");
-        #endif
-        return;
-      }
-      if (code == IR_A) {
-        submodePattern = PATTERN_FADE;
-        #if DEBUG >= 1
-        Serial.println("submode PATTERN_FADE");
-        #endif
-      }
-      if (code == IR_B) {
-        submodePattern = PATTERN_PULSE;
-        #if DEBUG >= 1
-        Serial.println("submode PATTERN_PULSE");
-        #endif
-      }
-      if (code == IR_C) {
-        submodePattern = PATTERN_CANDLE;
-        #if DEBUG >= 1
-        Serial.println("submode PATTERN_CANDLE");
-        #endif
-      }
-      if (code == IR_RIGHT) {
-        if (submodePattern == PATTERN_FADE && patternFadeSpeed < MAX_SPEED_OPTION) {
-          patternFadeSpeed++;
-        }
-        if (submodePattern == PATTERN_PULSE && patternPulseSpeed < MAX_SPEED_OPTION) {
-          patternPulseSpeed++;
-        }
-        if (submodePattern == PATTERN_CANDLE && patternCandleSpeed < MAX_SPEED_OPTION) {
-          patternCandleSpeed++;
-        }
-        #if DEBUG >= 2
-        Serial.print("fade");
-        Serial.print(patternFadeSpeed);
-        Serial.print(" pulse");
-        Serial.print(patternPulseSpeed);
-        Serial.print(" candle");
-        Serial.print(patternCandleSpeed);
-        Serial.print("\n");
-        #endif
-      }
-      if (code == IR_LEFT) {
-        if (submodePattern == PATTERN_FADE && patternFadeSpeed > -MAX_SPEED_OPTION) {
-          patternFadeSpeed--;
-        }
-        if (submodePattern == PATTERN_PULSE && patternPulseSpeed > -MAX_SPEED_OPTION) {
-          patternPulseSpeed--;
-        }
-        if (submodePattern == PATTERN_CANDLE && patternCandleSpeed > -MAX_SPEED_OPTION) {
-          patternCandleSpeed--;
-        }
-        #if DEBUG >= 2
-        Serial.print("fade");
-        Serial.print(patternFadeSpeed);
-        Serial.print(" pulse");
-        Serial.print(patternPulseSpeed);
-        Serial.print(" candle");
-        Serial.print(patternCandleSpeed);
-        Serial.print("\n");
-        #endif
-      }
-      if (submodePattern == PATTERN_FADE) {
-        float b = 1 / (float)(-(patternFadeSpeed - 5) * 400 - 300);
-        int C = 255;
-        float H = mil * b;
-        float HH = (H / (PI / 3.0));
-        int iHH = (int)HH;
-        float HHHf = HH - iHH;
-        int X = C * (1 - abs(HHHf + iHH % 2 - 1));
-        if (iHH % 6 == 0) {
-           patternFadeRed = C;
-           patternFadeGreen = curve(X, 255);
-           patternFadeBlue = 0;
-        }
-        if (iHH % 6 == 1) {
-           patternFadeRed = curve(X, 255);
-           patternFadeGreen = C;
-           patternFadeBlue = 0;
-        }
-        if (iHH % 6 == 2) {
-           patternFadeRed = 0;
-           patternFadeGreen = C;
-           patternFadeBlue = curve(X, 255);
-        }
-        if (iHH % 6 == 3) {
-           patternFadeRed = 0;
-           patternFadeGreen = curve(X, 255);
-           patternFadeBlue = C;
-        }
-        if (iHH % 6 == 4) {
-           patternFadeRed = curve(X, 255);
-           patternFadeGreen = 0;
-           patternFadeBlue = C;
-        }
-        if (iHH % 6 == 5) {
-           patternFadeRed = C;
-           patternFadeGreen = 0;
-           patternFadeBlue = curve(X, 255);
-        }
-      }
-      if (submodePattern == PATTERN_PULSE) {
-        double patternPulseValue = 0.5 * sin(millis() / (float)(-(patternPulseSpeed - 5) * 100)) + 0.5;
-        patternPulseRed = selectRed * patternPulseValue;
-        patternPulseGreen = selectGreen * patternPulseValue;
-        patternPulseBlue = selectBlue * patternPulseValue;
-      }
-      if (submodePattern == PATTERN_CANDLE) {
-        patternCandleFlickerTimer -= sinceLastMillis;
-        if (patternCandleFlickerTimer <= 0) {
-          patternCandleRed = 255;
-          patternCandleGreen = random(117 - (patternCandleSpeed + 4) * 3, 117 + (patternCandleSpeed + 4) * 3);
-          patternCandleBlue = random(9 - (patternCandleSpeed + 4) * 1, 9 + (patternCandleSpeed + 4) * 1);
-          patternCandleFlickerTimer += random(40 - (patternCandleSpeed + 4) * 4, 40 + (patternCandleSpeed + 4) * 4);
-        }
+    if (code == IR_RIGHT && mode == PATTERN_FADE && patternFadeSpeed < MAX_SPEED_OPTION) {
+      patternFadeSpeed++;
+      patternFadeTimer = 0;
+#if DEBIG >= 2
+      Serial.println(patternFadeSpeed);
+#endif
+    }
+    if (code == IR_RIGHT && mode == PATTERN_PULSE && patternPulseSpeed < MAX_SPEED_OPTION) {
+      patternPulseSpeed++;
+#if DEBUG >= 2
+      Serial.println(patternPulseSpeed);
+#endif
+    }
+    if (code == IR_RIGHT && mode == PATTERN_CANDLE && patternCandleSpeed < MAX_SPEED_OPTION) {
+      patternCandleSpeed++;
+#if DEBUG >= 2
+      Serial.println(patternCandleSpeed);
+#endif
+    }
+    if (code == IR_LEFT && mode == PATTERN_FADE && patternFadeSpeed > -MAX_SPEED_OPTION) {
+      patternFadeSpeed--;
+#if DEBUG >= 2
+      Serial.println(patternFadeSpeed);
+#endif
+    }
+    if (code == IR_LEFT && mode == PATTERN_PULSE && patternPulseSpeed > -MAX_SPEED_OPTION) {
+      patternPulseSpeed--;
+      patternFadeTimer = 0;
+#if DEBUG >= 2
+      Serial.println(patternPulseSpeed);
+#endif
+    }
+    if (code == IR_LEFT && mode == PATTERN_CANDLE && patternCandleSpeed > -MAX_SPEED_OPTION) {
+      patternCandleSpeed--;
+#if DEBUG >= 2
+      Serial.println(patternCandleSpeed);
+#endif
+    }
+    if (mode == PATTERN_FADE) {
+      float b = 1 / (float)(-(patternFadeSpeed - 5) * 400 - 300);
+      int wrap = 200 * PI * (17 - 4 * patternFadeSpeed);
+      if (patternFadeTimer >= wrap) patternFadeTimer -= wrap;
+      hueToRGB(patternFadeTimer * b, patternFadeRed, patternFadeGreen, patternFadeBlue);
+      patternFadeRed = curve(patternFadeRed, 255);
+      patternFadeGreen = curve(patternFadeGreen, 255);
+      patternFadeBlue = curve(patternFadeBlue, 255);
+    }
+    if (mode == PATTERN_PULSE) {
+      double patternPulseValue = 0.5 * sin(millis() / (float)(-(patternPulseSpeed - 5) * 100)) + 0.5;
+      patternPulseRed = selectRed * patternPulseValue;
+      patternPulseGreen = selectGreen * patternPulseValue;
+      patternPulseBlue = selectBlue * patternPulseValue;
+    }
+    if (mode == PATTERN_CANDLE) {
+      patternCandleFlickerTimer -= sinceLastMillis;
+      if (patternCandleFlickerTimer <= 0) {
+        patternCandleRed = 255;
+        patternCandleGreen = random(117 - (patternCandleSpeed + 4) * 3, 117 + (patternCandleSpeed + 4) * 3);
+        patternCandleBlue = random(9 - (patternCandleSpeed + 4) * 1, 9 + (patternCandleSpeed + 4) * 1);
+        patternCandleFlickerTimer += random(40 - (patternCandleSpeed + 4) * 4, 40 + (patternCandleSpeed + 4) * 4);
       }
     }
+
   }
 
   if (ir.isIdle()) {
@@ -317,16 +231,14 @@ void updatePixels() {
   if (mode == SELECT) {
     setAllPixels(selectRed, selectGreen, selectBlue);
   }
-  if (mode == PATTERN) {
-    if (submodePattern == PATTERN_FADE) {
-      setAllPixels(patternFadeRed, patternFadeGreen, patternFadeBlue);
-    }
-    if (submodePattern == PATTERN_PULSE) {
-      setAllPixels(patternPulseRed, patternPulseGreen, patternPulseBlue);
-    }
-    if (submodePattern == PATTERN_CANDLE) {
-      setAllPixels(patternCandleRed, patternCandleGreen, patternCandleBlue);
-    }
+  if (mode == PATTERN_FADE) {
+    setAllPixels(patternFadeRed, patternFadeGreen, patternFadeBlue);
+  }
+  if (mode == PATTERN_PULSE) {
+    setAllPixels(patternPulseRed, patternPulseGreen, patternPulseBlue);
+  }
+  if (mode == PATTERN_CANDLE) {
+    setAllPixels(patternCandleRed, patternCandleGreen, patternCandleBlue);
   }
   ring.setBrightness(brightness);
 }
@@ -344,14 +256,53 @@ int curve(double value, int full) {
 uint16_t grabIR() {
   if (ir.decode(&irData)) {
     uint32_t value = irData.value;
-    #if DEBUG >= 3
+#if DEBUG >= 3
     Serial.println(value & 0xFFFF, HEX);
-    #endif
+#endif
     ir.resume();
     if (value >> 16 == IR_PREFIX) {
       return value & 0xFFFF;
     }
   }
-  
+
   return 0;
 }
+
+void hueToRGB(float hueAngle, int &red, int &green, int &blue) {
+  int C = 255;
+  float hueValue = (hueAngle / (PI / 3.0));
+  int hueSixth = (int)hueValue;
+  float hueValueFraction = hueValue - hueSixth;
+  int X = C * (1 - abs(hueValueFraction + hueSixth % 2 - 1));
+  if (hueSixth % 6 == 0) {
+    red = C;
+    green = X;
+    blue = 0;
+  }
+  if (hueSixth % 6 == 1) {
+    red = X;
+    green = C;
+    blue = 0;
+  }
+  if (hueSixth % 6 == 2) {
+    red = 0;
+    green = C;
+    blue = X;
+  }
+  if (hueSixth % 6 == 3) {
+    red = 0;
+    green = X;
+    blue = C;
+  }
+  if (hueSixth % 6 == 4) {
+    red = X;
+    green = 0;
+    blue = C;
+  }
+  if (hueSixth % 6 == 5) {
+    red = C;
+    green = 0;
+    blue = X;
+  }
+}
+
