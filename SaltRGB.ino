@@ -177,6 +177,7 @@ void loop() {
     }
     if (code == IR_LEFT && mode == PATTERN_FADE && patternFadeSpeed > -MAX_SPEED_OPTION) {
       patternFadeSpeed--;
+      patternFadeTimer = 0;
 #if DEBUG >= 2
       Serial.println(patternFadeSpeed);
 #endif
